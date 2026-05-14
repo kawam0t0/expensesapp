@@ -53,26 +53,28 @@ const EXPENSE_FIELDS: FormField[] = [
   // ロイヤリティ・運営代行費（売上の5% 自動計算）
   { category: "運営費用", item_name: "ロイヤリティ", label: "ロイヤリティ（売上の5%）", autoCalc: true, allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "運営代行費", label: "運営代行費（売上の5%）", autoCalc: true, allowFile: true, multiFile: true },
-  // 公共料金
+  // インフラ料金
   { category: "運営費用", item_name: "水道料金", label: "水道料金", allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "電気料金", label: "電気料金", allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "ガス料金", label: "ガス料金", allowFile: true, multiFile: true },
+  { category: "運営費用", item_name: "通信費", label: "通信費", allowFile: true, multiFile: true },
   // 運営備品費
   { category: "運営費用", item_name: "運営備品費（販促グッズ類）", label: "販促グッズ類", indent: 1, allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "運営備品費（液剤費）", label: "液剤費", indent: 1, allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "運営備品費（その他備品費用）", label: "その他備品費用(amazon,cainz等)", indent: 1, allowFile: true, multiFile: true },
   // 固定費
-  { category: "運営費用", item_name: "保険費用", label: "保険費用", defaultValue: 40000, allowFile: true, multiFile: true },
-  { category: "運営費用", item_name: "関東電気保安協会費用", label: "関東電気保安協会費用", defaultValue: 13000, allowFile: true, multiFile: true },
+  { category: "運営費用", item_name: "保険費用", label: "保険費用", defaultValue: 31500, allowFile: true, multiFile: true },
+  { category: "運営費用", item_name: "関東電気保安協会費用", label: "関東電気保安協会費用", defaultValue: 17600, allowFile: true, multiFile: true },
+  { category: "運営費用", item_name: "システム利用料", label: "システム利用料", defaultValue: 35000, allowFile: true, multiFile: true },
 ];
 
 // セクションヘッダー: EXPENSE_FIELDS の index => 中項目ラベル
 const EXPENSE_GROUP_HEADERS: Record<number, { label: string; color: string }> = {
   0: { label: "人件費", color: "bg-blue-500/10 text-blue-600" },
   2: { label: "ロイヤリティ・運営代行費", color: "bg-blue-500/10 text-blue-600" },
-  4: { label: "公共料金", color: "bg-blue-500/10 text-blue-600" },
-  7: { label: "運営備品費", color: "bg-blue-500/10 text-blue-600" },
-  10: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
+  4: { label: "インフラ料金", color: "bg-blue-500/10 text-blue-600" },
+  8: { label: "運営備品費", color: "bg-blue-500/10 text-blue-600" },
+  11: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
 };
 
 const ALL_FIELDS = [...SALES_FIELDS, ...EXPENSE_FIELDS];
@@ -279,7 +281,7 @@ export function NewExpenseDrawer({
   // FCfee と 運営代行費 の自動計算値
   const autoCalcValue = Math.round(salesTotal * 0.05);
 
-  // 運営費用合計（autoCalc項目は salesTotal * 0.05 で計算）
+  // 運営費用合計��autoCalc項目は salesTotal * 0.05 で計算）
   const expenseTotal = EXPENSE_FIELDS.reduce((acc, f) => {
     if (f.autoCalc) return acc + (salesTotal > 0 ? autoCalcValue : 0);
     return acc + (parseInt(amounts[f.item_name] ?? "0", 10) || 0);
@@ -384,8 +386,9 @@ export function NewExpenseDrawer({
     // 必須項目バリデーション
     const requiredFields = ALL_FIELDS.filter((f) => f.required);
     const missingFields = requiredFields.filter((f) => {
-      const val = parseInt(amounts[f.item_name] ?? "0", 10);
-      return isNaN(val) || val <= 0;
+      const raw = amounts[f.item_name];
+      // 未入力（undefined/空文字）のみエラー。0は有効な入力値として許可
+      return raw === undefined || raw === "";
     });
     if (missingFields.length > 0) {
       toast.error(`入力必須項目を入力してください: ${missingFields.map((f) => f.label).join("、")}`);
@@ -750,6 +753,34 @@ export function NewExpenseDrawer({
                               accept="image/*,application/pdf"
                               multiple
                               capture="environment"
+                              className="hidden"
+                              onChange={(e) => {
+                                const selected = Array.from(e.target.files ?? []);
+                                if (selected.length > 0) {
+                                  setMultiFiles((prev) => ({
+                                    ...prev,
+                                    [field.item_name]: [...(prev[field.item_name] ?? []), ...selected],
+                                  }));
+                                }
+                              }}
+                            />
+                            {/* クリップ/PDF・CSVボタン */}
+                            <button
+                              type="button"
+                              onClick={() => fileInputRefs.current[`${field.item_name}_doc`]?.click()}
+                              className={`shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${mFiles.some(f => f.type === "application/pdf" || f.name.endsWith(".csv"))
+                                  ? "border-primary bg-primary/10 text-primary"
+                                  : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
+                                }`}
+                              title="PDF・CSVを添付"
+                            >
+                              <Paperclip className="w-4 h-4" />
+                            </button>
+                            <input
+                              ref={(el) => { fileInputRefs.current[`${field.item_name}_doc`] = el; }}
+                              type="file"
+                              accept="application/pdf,.csv,text/csv"
+                              multiple
                               className="hidden"
                               onChange={(e) => {
                                 const selected = Array.from(e.target.files ?? []);
