@@ -31,8 +31,10 @@ export function FolderPdfPrint({ folderName, items }: FolderPdfPrintProps) {
     td { padding: 6px 10px; border-bottom: 1px solid #ddd; font-size: 11px; }
     tr:nth-child(even) td { background: #f5f7fa; }
     .amount { text-align: right; font-weight: 700; }
+    .amount-sub { text-align: right; font-size: 9px; color: #777; font-weight: 400; }
     .total-row td { font-weight: 900; font-size: 13px; border-top: 2px solid #1a3a5c; border-bottom: none; color: #111; background: #eef2f7; }
     .section-title { font-size: 12px; font-weight: 700; letter-spacing: 0.1em; margin: 18px 0 6px; color: #1a3a5c; text-transform: uppercase; }
+    .tax-exempt { display: inline-block; margin-left: 6px; font-size: 9px; font-weight: 700; color: #c0392b; border: 1px solid #c0392b; padding: 0px 4px; border-radius: 2px; vertical-align: middle; }
     .detail-table th { background: #2d5f8a; }
     @media print { body { padding: 16px 20px; } }
   </style>
@@ -85,20 +87,27 @@ export function FolderPdfPrint({ folderName, items }: FolderPdfPrintProps) {
                 <tr>
                   <th>日時</th>
                   <th>品目</th>
-                  <th style={{ textAlign: "right" }}>金額</th>
+                  <th style={{ textAlign: "right" }}>金額（税込）</th>
+                  <th style={{ textAlign: "right" }}>金額（税抜）</th>
                 </tr>
               </thead>
               <tbody>
-                {salesItems.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.datetime}</td>
-                    <td>{e.item_name}</td>
-                    <td className="amount">¥{Number(e.amount).toLocaleString("ja-JP")}</td>
-                  </tr>
-                ))}
+                {salesItems.map((e) => {
+                  const inc = Number(e.amount);
+                  const exc = Math.floor(inc / 1.1);
+                  return (
+                    <tr key={e.id}>
+                      <td>{e.datetime}</td>
+                      <td>{e.item_name}</td>
+                      <td className="amount">¥{inc.toLocaleString("ja-JP")}</td>
+                      <td className="amount">¥{exc.toLocaleString("ja-JP")}</td>
+                    </tr>
+                  );
+                })}
                 <tr className="total-row">
                   <td colSpan={2}>売上 小計</td>
                   <td className="amount">¥{salesTotal.toLocaleString("ja-JP")}</td>
+                  <td className="amount">¥{Math.floor(salesTotal / 1.1).toLocaleString("ja-JP")}</td>
                 </tr>
               </tbody>
             </table>
@@ -114,39 +123,54 @@ export function FolderPdfPrint({ folderName, items }: FolderPdfPrintProps) {
                 <tr>
                   <th>日時</th>
                   <th>品目</th>
-                  <th style={{ textAlign: "right" }}>金額</th>
+                  <th style={{ textAlign: "right" }}>金額（税込）</th>
+                  <th style={{ textAlign: "right" }}>金額（税抜）</th>
                 </tr>
               </thead>
               <tbody>
-                {expenseItems.map((e) => (
-                  <tr key={e.id}>
-                    <td>{e.datetime}</td>
-                    <td>{e.item_name}</td>
-                    <td className="amount">¥{Number(e.amount).toLocaleString("ja-JP")}</td>
-                  </tr>
-                ))}
+                {expenseItems.map((e) => {
+                  const inc = Number(e.amount);
+                  // 非課税項目：人件費・保険費用
+                  const isTaxExempt =
+                    e.item_name.startsWith("人件費") ||
+                    e.item_name === "保険費用" ||
+                    e.item_name === "福利厚生費";
+                  return (
+                    <tr key={e.id}>
+                      <td>{e.datetime}</td>
+                      <td>
+                        {e.item_name}
+                        {isTaxExempt && (
+                          <span className="tax-exempt">非課税</span>
+                        )}
+                      </td>
+                      <td className="amount">¥{inc.toLocaleString("ja-JP")}</td>
+                      <td className="amount">{isTaxExempt ? "—" : `¥${Math.floor(inc / 1.1).toLocaleString("ja-JP")}`}</td>
+                    </tr>
+                  );
+                })}
                 <tr className="total-row">
                   <td colSpan={2}>運営費用 小計</td>
                   <td className="amount">¥{expenseTotal.toLocaleString("ja-JP")}</td>
+                  <td className="amount">¥{Math.floor(expenseTotal / 1.1).toLocaleString("ja-JP")}</td>
+                </tr>
+                <tr style={{ background: "#1a3a5c", borderTop: "2px solid #0f2a42" }}>
+                  <td colSpan={2} style={{ color: "#fff", fontWeight: 900, fontSize: "13px", padding: "10px", letterSpacing: "0.1em" }}>
+                    {transferAmount >= 0 ? "振込金額" : "請求金額"}
+                  </td>
+                  <td style={{ color: "#fff", fontWeight: 900, fontSize: "13px", padding: "10px", textAlign: "right" }}>
+                    ¥{Math.abs(transferAmount).toLocaleString("ja-JP")}
+                    <div style={{ fontSize: "9px", fontWeight: 400, color: "#cdd9e5", marginTop: "1px" }}>税込</div>
+                  </td>
+                  <td style={{ color: "#fff", fontWeight: 900, fontSize: "13px", padding: "10px", textAlign: "right" }}>
+                    ¥{Math.abs(Math.floor(transferAmount / 1.1)).toLocaleString("ja-JP")}
+                    <div style={{ fontSize: "9px", fontWeight: 400, color: "#cdd9e5", marginTop: "1px" }}>税抜</div>
+                  </td>
                 </tr>
               </tbody>
             </table>
           </>
         )}
-
-        {/* 振込金額 / 請求金額 */}
-        <table style={{ marginTop: "12px" }}>
-          <tbody>
-            <tr style={{ background: "#1a3a5c" }}>
-              <td style={{ color: "#fff", fontWeight: 900, fontSize: "14px", padding: "10px", letterSpacing: "0.1em" }}>
-                {transferAmount >= 0 ? "振込金額" : "請求金額"}
-              </td>
-              <td style={{ color: "#fff", fontWeight: 900, fontSize: "14px", padding: "10px", textAlign: "right", letterSpacing: "0.05em" }}>
-                {transferAmount < 0 && "-"}¥{Math.abs(transferAmount).toLocaleString("ja-JP")}
-              </td>
-            </tr>
-          </tbody>
-        </table>
       </div>
     </>
   );

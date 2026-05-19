@@ -50,6 +50,7 @@ const EXPENSE_FIELDS: FormField[] = [
   // 人件費
   { category: "運営費用", item_name: "人件費（藤岡大塚店）", label: "藤岡大塚店スタッフ", indent: 1, allowFile: true, multiFile: true, required: true },
   { category: "運営費用", item_name: "人件費（本部）", label: "本部スタッフ", indent: 1, allowFile: true, multiFile: true, csvCalc: true, required: true },
+  { category: "運営費用", item_name: "福利厚生費", label: "福利厚生費", indent: 1, allowFile: true, multiFile: true },
   // ロイヤリティ・運営代行費（売上の5% 自動計算）
   { category: "運営費用", item_name: "ロイヤリティ", label: "ロイヤリティ（売上の5%）", autoCalc: true, allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "運営代行費", label: "運営代行費（売上の5%）", autoCalc: true, allowFile: true, multiFile: true },
@@ -70,11 +71,11 @@ const EXPENSE_FIELDS: FormField[] = [
 
 // セクションヘッダー: EXPENSE_FIELDS の index => 中項目ラベル
 const EXPENSE_GROUP_HEADERS: Record<number, { label: string; color: string }> = {
-  0: { label: "人件費", color: "bg-blue-500/10 text-blue-600" },
-  2: { label: "ロイヤリティ・運営代行費", color: "bg-blue-500/10 text-blue-600" },
-  4: { label: "インフラ料金", color: "bg-blue-500/10 text-blue-600" },
-  8: { label: "運営備品費", color: "bg-blue-500/10 text-blue-600" },
-  11: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
+  0:  { label: "人件費", color: "bg-blue-500/10 text-blue-600" },
+  3:  { label: "ロイヤリティ・運営代行費", color: "bg-blue-500/10 text-blue-600" },
+  5:  { label: "インフラ料金", color: "bg-blue-500/10 text-blue-600" },
+  9:  { label: "運営備品費", color: "bg-blue-500/10 text-blue-600" },
+  12: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
 };
 
 const ALL_FIELDS = [...SALES_FIELDS, ...EXPENSE_FIELDS];
@@ -972,7 +973,7 @@ export function NewExpenseDrawer({
                 </div>
               </div>
             )}
-            {/* 売上合計（税込・税抜） */}
+            {/* 売上合計（��込・税抜） */}
             <div className="space-y-0.5">
               <div className="flex items-center justify-between">
                 <span className="text-sm text-muted-foreground tracking-wider">売上合計（税込）</span>
