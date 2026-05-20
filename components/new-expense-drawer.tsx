@@ -591,12 +591,12 @@ export function NewExpenseDrawer({
                 const taxInc = parseInt(amounts[field.item_name] ?? "0", 10) || 0;
                 const taxExc = Math.floor(taxInc / 1.1);
                 return (
-                  <div key={field.item_name} className="flex items-center gap-4 px-4 py-4">
-                    <label className="text-sm text-foreground tracking-wider flex-1 min-w-0">
+                  <div key={field.item_name} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 px-4 py-4">
+                    <label className="text-sm font-medium text-foreground tracking-wider sm:flex-1 sm:min-w-0">
                       {field.label}
                       {field.required && <span className="text-red-500 ml-1 text-xs">*</span>}
                     </label>
-                    <div className="shrink-0 w-40 flex flex-col gap-1">
+                    <div className="w-full sm:w-40 sm:shrink-0 flex flex-col gap-1">
                       <div className="relative">
                         <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{"\u00A5"}</span>
                         <input
@@ -605,11 +605,11 @@ export function NewExpenseDrawer({
                           value={amounts[field.item_name] ?? ""}
                           onChange={(e) => setAmount(field.item_name, e.target.value)}
                           placeholder="0"
-                          className="w-full bg-input border border-border text-foreground text-sm pl-7 pr-3 py-2.5 focus:outline-none focus:border-primary transition-colors"
+                          className="w-full bg-input border border-border text-foreground text-base sm:text-sm pl-7 pr-3 py-3 sm:py-2.5 focus:outline-none focus:border-primary transition-colors"
                         />
                       </div>
                       {taxInc > 0 && (
-                        <p className="text-[10px] text-muted-foreground/70 tracking-wider text-right">
+                        <p className="text-xs text-muted-foreground/70 tracking-wider text-right">
                           税抜 ¥{taxExc.toLocaleString("ja-JP")}
                         </p>
                       )}
@@ -649,29 +649,30 @@ export function NewExpenseDrawer({
                       </div>
                     )}
 
-                    <div className={`px-4 py-4 ${field.indent ? "pl-8" : ""}`}>
-                      <div className="flex items-center gap-3">
-                        <label className="text-sm text-foreground tracking-wider flex-1 min-w-0">
+                    <div className={`px-4 py-4 ${field.indent ? "sm:pl-8 pl-4" : ""}`}>
+                      <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                        <label className="text-sm font-medium text-foreground tracking-wider sm:flex-1 sm:min-w-0">
                           {field.label}
                           {field.required && <span className="text-red-500 ml-1 text-xs">*</span>}
                         </label>
+                        <div className="flex items-start gap-2 w-full sm:w-auto sm:shrink-0">
 
                         {isAuto ? (() => {
                           const taxExcAuto = salesTotal > 0 ? Math.floor(autoCalcValue / 1.1) : 0;
                           return (
                             // 自動計算（読み取り専用）
-                            <div className="shrink-0 w-40 flex flex-col gap-1">
+                            <div className="flex-1 sm:flex-none sm:w-40 flex flex-col gap-1">
                               <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{"\u00A5"}</span>
                                 <input
                                   type="text"
                                   readOnly
                                   value={salesTotal > 0 ? autoCalcValue.toLocaleString("ja-JP") : "0"}
-                                  className="w-full bg-secondary border border-border text-muted-foreground text-sm pl-7 pr-3 py-2.5 cursor-not-allowed"
+                                  className="w-full bg-secondary border border-border text-muted-foreground text-base sm:text-sm pl-7 pr-3 py-3 sm:py-2.5 cursor-not-allowed"
                                 />
                               </div>
                               {salesTotal > 0 && (
-                                <p className="text-[10px] text-muted-foreground/70 tracking-wider text-right">
+                                <p className="text-xs text-muted-foreground/70 tracking-wider text-right">
                                   税抜 ¥{taxExcAuto.toLocaleString("ja-JP")}
                                 </p>
                               )}
@@ -682,7 +683,7 @@ export function NewExpenseDrawer({
                           const taxExc = Math.floor(taxInc / 1.1);
                           return (
                             // 通常入力
-                            <div className="shrink-0 w-40 flex flex-col gap-1">
+                            <div className="flex-1 sm:flex-none sm:w-40 flex flex-col gap-1">
                               <div className="relative">
                                 <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{"\u00A5"}</span>
                                 <input
@@ -691,11 +692,11 @@ export function NewExpenseDrawer({
                                   value={amounts[field.item_name] ?? ""}
                                   onChange={(e) => setAmount(field.item_name, e.target.value)}
                                   placeholder="0"
-                                  className="w-full bg-input border border-border text-foreground text-sm pl-7 pr-3 py-2.5 focus:outline-none focus:border-primary transition-colors"
+                                  className="w-full bg-input border border-border text-foreground text-base sm:text-sm pl-7 pr-3 py-3 sm:py-2.5 focus:outline-none focus:border-primary transition-colors"
                                 />
                               </div>
                               {taxInc > 0 && (
-                                <p className="text-[10px] text-muted-foreground/70 tracking-wider text-right">
+                                <p className="text-xs text-muted-foreground/70 tracking-wider text-right">
                                   税抜 ¥{taxExc.toLocaleString("ja-JP")}
                                 </p>
                               )}
@@ -742,13 +743,13 @@ export function NewExpenseDrawer({
                             <button
                               type="button"
                               onClick={() => setActionSheetField(field.item_name)}
-                              className={`shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${mFiles.length > 0
+                              className={`shrink-0 w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center border transition-colors ${mFiles.length > 0
                                   ? "border-primary bg-primary/10 text-primary"
                                   : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
                                 }`}
                               title="ファイルを追加"
                             >
-                              <Camera className="w-4 h-4" />
+                              <Camera className="w-5 h-5 sm:w-4 sm:h-4" />
                             </button>
                             {/* 写真を撮る（カメラ起動） */}
                             <input
@@ -790,13 +791,13 @@ export function NewExpenseDrawer({
                             <button
                               type="button"
                               onClick={() => fileInputRefs.current[`${field.item_name}_doc`]?.click()}
-                              className={`shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${mFiles.some(f => f.type === "application/pdf" || f.name.endsWith(".csv"))
+                              className={`shrink-0 w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center border transition-colors ${mFiles.some(f => f.type === "application/pdf" || f.name.endsWith(".csv"))
                                   ? "border-primary bg-primary/10 text-primary"
                                   : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
                                 }`}
                               title="PDF・CSVを添付"
                             >
-                              <Paperclip className="w-4 h-4" />
+                              <Paperclip className="w-5 h-5 sm:w-4 sm:h-4" />
                             </button>
                             <input
                               ref={(el) => { fileInputRefs.current[`${field.item_name}_doc`] = el; }}
@@ -842,6 +843,7 @@ export function NewExpenseDrawer({
                             )}
                           </>
                         )}
+                        </div>{/* end input+buttons wrapper */}
                       </div>
 
                       {/* 複数ファイルのプレビューリスト */}
