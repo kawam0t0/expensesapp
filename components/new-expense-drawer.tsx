@@ -123,6 +123,8 @@ export function NewExpenseDrawer({
   // プレビューダイアログ
   const [previewFiles, setPreviewFiles] = useState<File[] | null>(null);
   const [previewUrls, setPreviewUrls] = useState<string[]>([]);
+  // カメラアクションシート
+  const [actionSheetField, setActionSheetField] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
 
   useEffect(() => {
@@ -736,23 +738,23 @@ export function NewExpenseDrawer({
                         {/* ファイル添付（複数） */}
                         {field.allowFile && field.multiFile && (
                           <>
-                            {/* カメラ/画像ボタン */}
+                            {/* カメラボタン → アクションシート表示 */}
                             <button
                               type="button"
-                              onClick={() => fileInputRefs.current[field.item_name]?.click()}
+                              onClick={() => setActionSheetField(field.item_name)}
                               className={`shrink-0 w-9 h-9 flex items-center justify-center border transition-colors ${mFiles.length > 0
                                   ? "border-primary bg-primary/10 text-primary"
                                   : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
                                 }`}
-                              title="領収書撮影・添付"
+                              title="ファイルを追加"
                             >
                               <Camera className="w-4 h-4" />
                             </button>
+                            {/* 写真を撮る（カメラ起動） */}
                             <input
-                              ref={(el) => { fileInputRefs.current[field.item_name] = el; }}
+                              ref={(el) => { fileInputRefs.current[`${field.item_name}_capture`] = el; }}
                               type="file"
-                              accept="image/*,application/pdf"
-                              multiple
+                              accept="image/*"
                               capture="environment"
                               className="hidden"
                               onChange={(e) => {
@@ -763,6 +765,25 @@ export function NewExpenseDrawer({
                                     [field.item_name]: [...(prev[field.item_name] ?? []), ...selected],
                                   }));
                                 }
+                                e.target.value = "";
+                              }}
+                            />
+                            {/* カメラロールから選択 */}
+                            <input
+                              ref={(el) => { fileInputRefs.current[`${field.item_name}_gallery`] = el; }}
+                              type="file"
+                              accept="image/*"
+                              multiple
+                              className="hidden"
+                              onChange={(e) => {
+                                const selected = Array.from(e.target.files ?? []);
+                                if (selected.length > 0) {
+                                  setMultiFiles((prev) => ({
+                                    ...prev,
+                                    [field.item_name]: [...(prev[field.item_name] ?? []), ...selected],
+                                  }));
+                                }
+                                e.target.value = "";
                               }}
                             />
                             {/* クリップ/PDF・CSVボタン */}
@@ -1046,6 +1067,64 @@ export function NewExpenseDrawer({
           </section>
         </form>
       </div>
+
+      {/* カメラアクションシート */}
+      {actionSheetField && (
+        <div
+          className="fixed inset-0 z-[70] flex items-end justify-center bg-black/50"
+          onClick={() => setActionSheetField(null)}
+        >
+          <div
+            className="bg-background w-full max-w-lg mb-0 pb-safe"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="px-4 pt-5 pb-2 text-center border-b border-border">
+              <p className="text-xs text-muted-foreground tracking-[0.2em] uppercase">ファイルの追加方法を選択してください</p>
+            </div>
+            <div className="flex flex-col divide-y divide-border">
+              <button
+                type="button"
+                className="w-full py-4 text-base font-medium text-foreground tracking-wider hover:bg-secondary transition-colors"
+                onClick={() => {
+                  fileInputRefs.current[`${actionSheetField}_capture`]?.click();
+                  setActionSheetField(null);
+                }}
+              >
+                写真を撮る
+              </button>
+              <button
+                type="button"
+                className="w-full py-4 text-base font-medium text-foreground tracking-wider hover:bg-secondary transition-colors"
+                onClick={() => {
+                  fileInputRefs.current[`${actionSheetField}_gallery`]?.click();
+                  setActionSheetField(null);
+                }}
+              >
+                カメラロールから選択
+              </button>
+              <button
+                type="button"
+                className="w-full py-4 text-base font-medium text-foreground tracking-wider hover:bg-secondary transition-colors"
+                onClick={() => {
+                  fileInputRefs.current[`${actionSheetField}_doc`]?.click();
+                  setActionSheetField(null);
+                }}
+              >
+                ファイルから選択
+              </button>
+            </div>
+            <div className="border-t-4 border-border">
+              <button
+                type="button"
+                className="w-full py-4 text-base font-bold text-muted-foreground tracking-wider hover:bg-secondary transition-colors"
+                onClick={() => setActionSheetField(null)}
+              >
+                キャンセル
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* ファイルプレビューダイアログ */}
       {previewFiles && previewFiles.length > 0 && (
