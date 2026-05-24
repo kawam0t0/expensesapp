@@ -168,10 +168,7 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
     return acc;
   }, {});
 
-  // フォルダーを日本語ソートした一覧
   const sortedFolderEntries = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b, "ja"));
-  // 最初のフォルダーはデフォルトで開く
-  const firstFolder = sortedFolderEntries[0]?.[0];
 
   return (
     <div className="pb-12 space-y-4 px-4 md:px-8 mt-6">
@@ -224,8 +221,7 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
           const expenseTotal = items.filter((e) => e.category !== "売上").reduce((s, e) => s + Number(e.amount), 0);
           const folderBalance = salesTotal - expenseTotal;
           const isNegative = folderBalance < 0;
-          // 最初のフォルダーはデフォルトで開く
-          const isOpen = openFolders[folder] ?? (folder === firstFolder);
+          const isOpen = openFolders[folder] ?? false;
 
           return (
             <div key={folder} className="border border-border overflow-hidden">

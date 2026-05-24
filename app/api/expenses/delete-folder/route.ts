@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { deleteFolder, deleteDraftByFolder } from "@/lib/sheets";
+import { deleteFolder, deleteDraftByFolder } from "@/lib/supabase-db";
 
 export async function DELETE(req: NextRequest) {
   try {

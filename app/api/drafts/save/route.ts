@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { saveDraft } from "@/lib/sheets";
+import { saveDraft } from "@/lib/supabase-db";
 
 export async function POST(req: NextRequest) {
   try {

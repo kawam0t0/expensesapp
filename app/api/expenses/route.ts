@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getExpenses } from "@/lib/sheets";
+import { getExpenses } from "@/lib/supabase-db";
 
 export async function GET() {
   try {
