@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { appendExpense } from "@/lib/sheets";
+import { appendExpense } from "@/lib/supabase-db";
 
 export async function POST(req: NextRequest) {
   try {

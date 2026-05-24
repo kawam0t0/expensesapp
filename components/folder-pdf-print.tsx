@@ -2,7 +2,7 @@
 
 import { useRef } from "react";
 import { Download } from "lucide-react";
-import type { ExpenseRow } from "@/lib/sheets";
+import type { ExpenseRow } from "@/lib/supabase-db";
 
 interface FolderPdfPrintProps {
   folderName: string;

@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import useSWR from "swr";
 import { Zap, Droplets, Package, Clock, RefreshCw, Plus, Trash2, ChevronDown, ExternalLink, TrendingUp, Building2, FileEdit, Loader2 } from "lucide-react";
 import { toast } from "sonner";
-import type { ExpenseRow } from "@/lib/sheets";
+import type { ExpenseRow } from "@/lib/supabase-db";
 import { FolderPdfPrint } from "@/components/folder-pdf-print";
+import { useExpensesRealtime } from "@/hooks/use-expenses-realtime";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
@@ -43,6 +44,14 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
     fetcher,
     { refreshInterval: 0 }
   );
+
+  // Supabase Realtime: 他デバイスの変更を即時反映
+  const handleRealtime = useCallback((event: "expenses" | "drafts" | "all") => {
+    if (event === "expenses" || event === "all") mutate();
+    if (event === "drafts" || event === "all") mutateDrafts();
+  }, [mutate, mutateDrafts]);
+  useExpensesRealtime(handleRealtime);
+
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [deletingDraft, setDeletingDraft] = useState<string | null>(null);
   const [deletingFolder, setDeletingFolder] = useState<string | null>(null);
@@ -159,6 +168,11 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
     return acc;
   }, {});
 
+  // フォルダーを日本語ソートした一覧
+  const sortedFolderEntries = Object.entries(grouped).sort(([a], [b]) => a.localeCompare(b, "ja"));
+  // 最初のフォルダーはデフォルトで開く
+  const firstFolder = sortedFolderEntries[0]?.[0];
+
   return (
     <div className="pb-12 space-y-4 px-4 md:px-8 mt-6">
       {/* 下書きのみフォルダー（経費未登録） */}
@@ -204,14 +218,14 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
           </div>
         </div>
       ))}
-      {Object.entries(grouped)
-        .sort(([a], [b]) => a.localeCompare(b, "ja"))
+      {sortedFolderEntries
         .map(([folder, items]) => {
           const salesTotal = items.filter((e) => e.category === "売上").reduce((s, e) => s + Number(e.amount), 0);
           const expenseTotal = items.filter((e) => e.category !== "売上").reduce((s, e) => s + Number(e.amount), 0);
           const folderBalance = salesTotal - expenseTotal;
           const isNegative = folderBalance < 0;
-          const isOpen = openFolders[folder] ?? false;
+          // 最初のフォルダーはデフォルトで開く
+          const isOpen = openFolders[folder] ?? (folder === firstFolder);
 
           return (
             <div key={folder} className="border border-border overflow-hidden">
