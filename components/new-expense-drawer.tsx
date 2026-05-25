@@ -1,10 +1,18 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { ArrowLeft, Loader2, Paperclip, Check, Camera, X as XIcon } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
+import { createClient } from "@supabase/supabase-js";
+
+function getSupabaseBrowser() {
+  return createClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
+  );
+}
 
 // ---------------------------------------------------------------------------
 // フォーム項目定義
@@ -126,6 +134,9 @@ export function NewExpenseDrawer({
   // カメラアクションシート
   const [actionSheetField, setActionSheetField] = useState<string | null>(null);
   const fileInputRefs = useRef<Record<string, HTMLInputElement | null>>({});
+  // 自動保存
+  const [autoSaveStatus, setAutoSaveStatus] = useState<"idle" | "saving" | "saved">("idle");
+  const autoSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
     if (!open) return;
@@ -146,7 +157,7 @@ export function NewExpenseDrawer({
       setDraftInfo(null);
       setAmazonCsvAmount(0);
 
-      // 下書きをフェッチして amounts と uploadedUrls に自動適用
+      // 下書き��フェッチして amounts と uploadedUrls に自動適用
       fetch(`/api/drafts/load?folder_name=${encodeURIComponent(initialFolderName)}`)
         .then((r) => r.json())
         .then((data) => {
@@ -173,22 +184,140 @@ export function NewExpenseDrawer({
     }
   }, [open, initialFolderName]);
 
+  // 自動保存（金額のみ、ファイルは別途）
+  const autoSave = useCallback(async (currentFolderName: string, currentAmounts: Record<string, string>, currentUrls: Record<string, string>) => {
+    if (!currentFolderName.trim()) return;
+    setAutoSaveStatus("saving");
+    try {
+      await fetch("/api/drafts/save", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ folder_name: currentFolderName, amounts: currentAmounts, uploaded_urls: currentUrls }),
+      });
+      setAutoSaveStatus("saved");
+    } catch {
+      setAutoSaveStatus("idle");
+    }
+  }, []);
+
+  // Supabase Realtime: 他デバイスの変更を即時反映
+  useEffect(() => {
+    if (step !== "form" || !folderName.trim()) return;
+
+    const supabase = getSupabaseBrowser();
+    const channel = supabase
+      .channel(`draft:${folderName}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "drafts",
+          filter: `folder_name=eq.${folderName}`,
+        },
+        (payload) => {
+          // 自分自身の保存中は無視（ちらつき防止）
+          if (autoSaveStatus === "saving") return;
+
+          const updated = payload.new as {
+            amounts_json: Record<string, string>;
+            files_json: Record<string, string>;
+          };
+
+          if (updated.amounts_json) {
+            setAmounts((prev) => ({ ...prev, ...updated.amounts_json }));
+          }
+          if (updated.files_json) {
+            setUploadedUrls(updated.files_json);
+          }
+        }
+      )
+      .subscribe();
+
+    return () => {
+      void supabase.removeChannel(channel);
+    };
+  }, [step, folderName, autoSaveStatus]);
+
+  // amounts が変わったら300ms後に自動保存
+  useEffect(() => {
+    if (step !== "form" || !folderName.trim()) return;
+    if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    autoSaveTimerRef.current = setTimeout(() => {
+      void autoSave(folderName, amounts, uploadedUrls);
+    }, 300);
+    return () => {
+      if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
+    };
+  }, [amounts, step, folderName, uploadedUrls, autoSave]);
+
+  // ファイル選択時：即座にSupabase Storageにアップロードして自動保存
+  async function handleFilesSelected(itemName: string, selected: File[]) {
+    if (!folderName.trim() || selected.length === 0) {
+      setMultiFiles((prev) => ({
+        ...prev,
+        [itemName]: [...(prev[itemName] ?? []), ...selected],
+      }));
+      return;
+    }
+    setAutoSaveStatus("saving");
+    const uploadedList: string[] = [];
+    const existingCount = (multiFiles[itemName] ?? []).length;
+    for (let i = 0; i < selected.length; i++) {
+      try {
+        const url = await uploadFileToDraft(itemName, selected[i], String(existingCount + i + 1));
+        uploadedList.push(url);
+      } catch {
+        // アップロード失敗はスキップ
+      }
+    }
+    setMultiFiles((prev) => ({
+      ...prev,
+      [itemName]: [...(prev[itemName] ?? []), ...selected],
+    }));
+    if (uploadedList.length > 0) {
+      // ローカルstateには追記（表示用）
+      setUploadedUrls((prev) => ({
+        ...prev,
+        [itemName]: [...(prev[itemName] ? prev[itemName].split("\n").filter(Boolean) : []), ...uploadedList].join("\n"),
+      }));
+      // サーバーには今回追加分のURLのみ送る
+      // saveDraft側でSupabaseの既存データと項目単位でマージされるため上書きされない
+      try {
+        await fetch("/api/drafts/save", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            folder_name: folderName,
+            amounts,
+            uploaded_urls: { [itemName]: uploadedList.join("\n") },
+          }),
+        });
+        setAutoSaveStatus("saved");
+      } catch {
+        setAutoSaveStatus("idle");
+      }
+    } else {
+      setAutoSaveStatus("idle");
+    }
+  }
+
   if (!open) return null;
 
-  // ドラフト���存
+  // ドラフト保存
   async function handleDraftSave() {
     if (!folderName.trim()) { toast.error("件名を入力してください"); return; }
     setIsSavingDraft(true);
     try {
-      // まだアップロードされていないファイルをDriveへ保存
+      // まだアップロードされていないファイルをSupabase Storageへ保存（下書き用）
       const urls: Record<string, string> = { ...uploadedUrls };
       for (const field of ALL_FIELDS) {
         const mFiles = multiFiles[field.item_name];
-        if (mFiles && mFiles.length > 0 && !urls[field.item_name]) {
+        if (mFiles && mFiles.length > 0) {
           const uploadedList: string[] = [];
           for (let i = 0; i < mFiles.length; i++) {
             try {
-              const url = await uploadFile(field.item_name, mFiles[i], String(i + 1));
+              const url = await uploadFileToDraft(field.item_name, mFiles[i], String(i + 1));
               uploadedList.push(url);
             } catch {
               // アップロード失敗は無視して続行
@@ -196,6 +325,16 @@ export function NewExpenseDrawer({
           }
           if (uploadedList.length > 0) {
             urls[field.item_name] = uploadedList.join("\n");
+          }
+        }
+        // 単一ファイルも対象
+        const sFile = files[field.item_name];
+        if (sFile && !urls[field.item_name]) {
+          try {
+            const url = await uploadFileToDraft(field.item_name, sFile);
+            urls[field.item_name] = url;
+          } catch {
+            // 無視
           }
         }
       }
@@ -234,7 +373,7 @@ export function NewExpenseDrawer({
     } catch { setDraftInfo(null); }
   }
 
-  /** Amazon/Cainz注文履歴CSVから「支払い金額」を合計してその他備品費用に加算 */
+  /** Amazon/Cainz注文履歴CSVから「支払い金額」を合計して���の他備品費用に加算 */
   async function handleAmazonCsv(file: File) {
     const text = await file.text();
     const lines = text.split(/\r?\n/).filter((l) => l.trim());
@@ -368,7 +507,7 @@ export function NewExpenseDrawer({
     setAmounts((prev) => ({ ...prev, [key]: v }));
   }
 
-  // ファイルをDriveにアップロード
+  // ファイルをGoogle Drive（��終登録用）にアップロード
   async function uploadFile(key: string, file: File, suffix?: string): Promise<string> {
     const fd = new FormData();
     fd.append("file", file);
@@ -378,6 +517,21 @@ export function NewExpenseDrawer({
     fd.append("file_name", fileName);
     fd.append("folder_name", folderName);
     const res = await fetch("/api/upload-receipt", { method: "POST", body: fd });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "アップロードエラー");
+    return data.url;
+  }
+
+  // ファイルをSupabase Storage（下書き用）にアップロード
+  async function uploadFileToDraft(key: string, file: File, suffix?: string): Promise<string> {
+    const fd = new FormData();
+    fd.append("file", file);
+    const fileName = suffix
+      ? `${folderName}_${key}_${suffix}.${file.name.split(".").pop()}`
+      : `${folderName}_${key}.${file.name.split(".").pop()}`;
+    fd.append("file_name", fileName);
+    fd.append("folder_name", folderName);
+    const res = await fetch("/api/upload-draft", { method: "POST", body: fd });
     const data = await res.json();
     if (!res.ok) throw new Error(data.error ?? "アップロードエラー");
     return data.url;
@@ -420,30 +574,51 @@ export function NewExpenseDrawer({
 
     setIsSubmitting(true);
     try {
-      // ファイルアップロード
-      const urls: Record<string, string> = { ...uploadedUrls };
+      // Google Driveへファイルアップロード（最終登録時）
+      // 優先順位:
+      //   1. ローカルFileオブジェクト → Driveへ直接アップロード
+      //   2. Supabase Storage URL → transfer-to-drive経由でDriveへ転送
+      const urls: Record<string, string> = {};
       for (const { field } of activeItems) {
-        // 単一ファイル
-        const file = files[field.item_name];
-        if (file && !urls[field.item_name]) {
-          try {
-            urls[field.item_name] = await uploadFile(field.item_name, file);
-          } catch {
-            toast.error(`${field.label} のファイルアップロードに失敗しました`);
-          }
-        }
-        // 複数ファイル
-        const mFiles = multiFiles[field.item_name];
-        if (mFiles && mFiles.length > 0 && !urls[field.item_name]) {
+        const itemName = field.item_name;
+
+        // ローカルファイルがあればDriveへ直接アップロード（優先）
+        const file = files[itemName];
+        const mFiles = multiFiles[itemName];
+
+        if (mFiles && mFiles.length > 0) {
           try {
             const uploadedList: string[] = [];
             for (let i = 0; i < mFiles.length; i++) {
-              const url = await uploadFile(field.item_name, mFiles[i], String(i + 1));
-              uploadedList.push(url);
+              const driveUrl = await uploadFile(itemName, mFiles[i], String(i + 1));
+              uploadedList.push(driveUrl);
             }
-            urls[field.item_name] = uploadedList.join("\n");
+            urls[itemName] = uploadedList.join("\n");
           } catch {
             toast.error(`${field.label} のファイルアップロードに失敗しました`);
+          }
+        } else if (file) {
+          try {
+            urls[itemName] = await uploadFile(itemName, file);
+          } catch {
+            toast.error(`${field.label} のファイルアップロードに失敗しました`);
+          }
+        } else if (uploadedUrls[itemName]) {
+          // Supabase Storage保存済みURLをDriveに転送
+          const storageUrls = uploadedUrls[itemName].split("\n").filter(Boolean);
+          try {
+            const res = await fetch("/api/transfer-to-drive", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ urls: storageUrls, item_name: itemName, folder_name: folderName }),
+            });
+            const data = await res.json() as { urls?: string[] };
+            if (data.urls && data.urls.length > 0) {
+              urls[itemName] = data.urls.join("\n");
+            }
+          } catch {
+            // 転送失敗時はSupabaseのURLをそのまま使用
+            urls[itemName] = uploadedUrls[itemName];
           }
         }
       }
@@ -464,6 +639,11 @@ export function NewExpenseDrawer({
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "登録に失敗しました");
+
+      // 登録成功後：下書きを削除する
+      await fetch(`/api/drafts/delete?folder_name=${encodeURIComponent(folderName)}`, {
+        method: "DELETE",
+      });
 
       toast.success(`${items.length} 件を登録しました`);
       onRegistered();
@@ -760,12 +940,7 @@ export function NewExpenseDrawer({
                               className="hidden"
                               onChange={(e) => {
                                 const selected = Array.from(e.target.files ?? []);
-                                if (selected.length > 0) {
-                                  setMultiFiles((prev) => ({
-                                    ...prev,
-                                    [field.item_name]: [...(prev[field.item_name] ?? []), ...selected],
-                                  }));
-                                }
+                                if (selected.length > 0) void handleFilesSelected(field.item_name, selected);
                                 e.target.value = "";
                               }}
                             />
@@ -778,12 +953,7 @@ export function NewExpenseDrawer({
                               className="hidden"
                               onChange={(e) => {
                                 const selected = Array.from(e.target.files ?? []);
-                                if (selected.length > 0) {
-                                  setMultiFiles((prev) => ({
-                                    ...prev,
-                                    [field.item_name]: [...(prev[field.item_name] ?? []), ...selected],
-                                  }));
-                                }
+                                if (selected.length > 0) void handleFilesSelected(field.item_name, selected);
                                 e.target.value = "";
                               }}
                             />
@@ -807,12 +977,7 @@ export function NewExpenseDrawer({
                               className="hidden"
                               onChange={(e) => {
                                 const selected = Array.from(e.target.files ?? []);
-                                if (selected.length > 0) {
-                                  setMultiFiles((prev) => ({
-                                    ...prev,
-                                    [field.item_name]: [...(prev[field.item_name] ?? []), ...selected],
-                                  }));
-                                }
+                                if (selected.length > 0) void handleFilesSelected(field.item_name, selected);
                               }}
                             />
                             {/* Amazon/Cainz CSV アップロードボタン */}
@@ -886,34 +1051,54 @@ export function NewExpenseDrawer({
                         </div>
                       )}
 
-                      {/* 下書き復元: アップロード済みファイルのURL表示 */}
+                      {/* 下書き復元: アップロード済みファイルのURL表示（個別削除対応） */}
                       {uploadedUrls[field.item_name] && mFiles.length === 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {uploadedUrls[field.item_name].split("\n").filter(Boolean).map((url, i) => {
                             const label = url.split("/").pop()?.split("?")[0] ?? `ファイル${i + 1}`;
                             const shortLabel = decodeURIComponent(label).slice(-20);
                             return (
-                              <a
+                              <span
                                 key={i}
-                                href={url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="inline-flex items-center gap-1 bg-primary/10 border border-primary/30 text-primary px-2 py-1 text-[10px] tracking-wider hover:bg-primary/20 transition-colors"
-                                title="Driveで開く"
+                                className="inline-flex items-center gap-1 bg-primary/10 border border-primary/30 text-primary px-2 py-1 text-[10px] tracking-wider"
                               >
-                                <Check className="w-2.5 h-2.5 shrink-0" />
-                                {shortLabel}
-                              </a>
+                                <a
+                                  href={url}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="hover:underline transition-colors max-w-[120px] truncate"
+                                  title="開く"
+                                >
+                                  <Check className="w-2.5 h-2.5 shrink-0 inline mr-0.5" />
+                                  {shortLabel}
+                                </a>
+                                <button
+                                  type="button"
+                                  title="このファイルを削除"
+                                  className="ml-0.5 text-primary/50 hover:text-destructive transition-colors shrink-0"
+                                  onClick={async () => {
+                                    // ローカルstateから即座に除去
+                                    setUploadedUrls((prev) => {
+                                      const current = (prev[field.item_name] ?? "").split("\n").filter(Boolean);
+                                      const updated = current.filter((u) => u !== url);
+                                      const n = { ...prev };
+                                      if (updated.length === 0) delete n[field.item_name];
+                                      else n[field.item_name] = updated.join("\n");
+                                      return n;
+                                    });
+                                    // Supabaseからも削除
+                                    await fetch("/api/drafts/remove-file", {
+                                      method: "POST",
+                                      headers: { "Content-Type": "application/json" },
+                                      body: JSON.stringify({ folder_name: folderName, item_name: field.item_name, url }),
+                                    });
+                                  }}
+                                >
+                                  <XIcon className="w-3 h-3" />
+                                </button>
+                              </span>
                             );
                           })}
-                          <button
-                            type="button"
-                            onClick={() => setUploadedUrls((prev) => { const n = { ...prev }; delete n[field.item_name]; return n; })}
-                            className="text-[10px] text-muted-foreground/60 hover:text-destructive tracking-wider transition-colors"
-                            title="保存済みファイルをクリア（再アップロード可能）"
-                          >
-                            クリア
-                          </button>
                         </div>
                       )}
 
@@ -921,7 +1106,7 @@ export function NewExpenseDrawer({
                       {field.amazonCsv && amazonCsvAmount > 0 && (
                         <div className="mt-2 flex items-center justify-between bg-blue-50 border border-blue-200 px-3 py-2">
                           <span className="text-[11px] text-blue-700 tracking-wider">
-                            CSV集計（Amazon/Cainz等）
+                            CSV集��（Amazon/Cainz等）
                           </span>
                           <div className="flex items-center gap-2">
                             <span className="text-sm font-bold text-blue-700">¥{amazonCsvAmount.toLocaleString()}</span>
@@ -984,7 +1169,7 @@ export function NewExpenseDrawer({
             {draftInfo && (
               <div className="flex items-center justify-between gap-3 bg-amber-50 border border-amber-300 px-4 py-3">
                 <p className="text-xs text-amber-800 tracking-wide">
-                  <span className="font-bold">下書きが見つかりました</span>（{draftInfo.saved_at}）
+                  <span className="font-bold">下書きが見��かりました</span>（{draftInfo.saved_at}）
                 </p>
                 <div className="flex gap-2 shrink-0">
                   <button type="button" onClick={restoreDraft} className="bg-amber-500 text-white text-[10px] tracking-widest uppercase font-bold px-3 py-1.5 hover:bg-amber-600 transition-colors">
@@ -1045,11 +1230,15 @@ export function NewExpenseDrawer({
               <button
                 type="button"
                 onClick={() => void handleDraftSave()}
-                disabled={isSavingDraft}
+                disabled={isSavingDraft || autoSaveStatus === "saving"}
                 className="border border-primary text-primary py-3.5 text-xs tracking-widest uppercase font-bold hover:bg-primary/5 transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5"
               >
-                {isSavingDraft ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : null}
-                下書き保存
+                {(isSavingDraft || autoSaveStatus === "saving") ? (
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                ) : autoSaveStatus === "saved" ? (
+                  <Check className="w-3.5 h-3.5 text-green-500" />
+                ) : null}
+                {autoSaveStatus === "saving" ? "自動保存中..." : autoSaveStatus === "saved" ? "自動保存済み" : "下書き保存"}
               </button>
               <button
                 type="submit"

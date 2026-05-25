@@ -88,25 +88,59 @@ export async function deleteExpense(id: string): Promise<void> {
   if (error) throw new Error(error.message);
 }
 
-/** 下書きを保存（同一 folder_name は upsert） */
+/** 下書きを保存（項目単位でマージ - 他デバイスの入力を上書きしない） */
 export async function saveDraft(
   folderName: string,
   amounts: Record<string, string>,
   uploadedUrls: Record<string, string> = {}
 ): Promise<void> {
   const supabase = getAdminClient();
-  const { error } = await supabase.from("drafts").upsert(
-    {
+
+  // まず既存レコードを確認
+  const { data: existing } = await supabase
+    .from("drafts")
+    .select("amounts_json, files_json")
+    .eq("folder_name", folderName)
+    .single();
+
+  if (existing) {
+    // 金額は新規が優先で上書き
+    const mergedAmounts = { ...(existing.amounts_json ?? {}), ...amounts };
+
+    // ファイルURLは項目ごとに「既存URL + 新規URL」を連結して追記（上書きしない）
+    const existingFiles: Record<string, string> = existing.files_json ?? {};
+    const mergedFiles: Record<string, string> = { ...existingFiles };
+    for (const [key, newVal] of Object.entries(uploadedUrls)) {
+      if (!newVal) continue;
+      const existingUrls = existingFiles[key] ? existingFiles[key].split("\n").filter(Boolean) : [];
+      const newUrls = newVal.split("\n").filter(Boolean);
+      // 重複URLを除いて追記
+      const combined = [...existingUrls, ...newUrls.filter((u) => !existingUrls.includes(u))];
+      mergedFiles[key] = combined.join("\n");
+    }
+
+    const { error } = await supabase
+      .from("drafts")
+      .update({
+        amounts_json: mergedAmounts,
+        files_json: mergedFiles,
+        updated_at: new Date().toISOString(),
+      })
+      .eq("folder_name", folderName);
+
+    if (error) throw new Error(error.message);
+  } else {
+    // 新規作成
+    const { error } = await supabase.from("drafts").insert({
       folder_name: folderName,
       amounts_json: amounts,
       files_json: uploadedUrls,
       saved_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-    },
-    { onConflict: "folder_name" }
-  );
+    });
 
-  if (error) throw new Error(error.message);
+    if (error) throw new Error(error.message);
+  }
 }
 
 /** folder_name で下書きを1件取得 */

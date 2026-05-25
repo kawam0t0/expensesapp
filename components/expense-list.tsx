@@ -10,6 +10,17 @@ import { useExpensesRealtime } from "@/hooks/use-expenses-realtime";
 
 const fetcher = (url: string) => fetch(url).then((r) => r.json());
 
+function formatDate(dateStr: string): string {
+  if (!dateStr) return "";
+  const d = new Date(dateStr);
+  if (isNaN(d.getTime())) return dateStr;
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  const hh = String(d.getHours()).padStart(2, "0");
+  const min = String(d.getMinutes()).padStart(2, "0");
+  return `${mm}/${dd} ${hh}:${min}`;
+}
+
 const CATEGORY_ICONS: Record<string, React.ReactNode> = {
   売上: <TrendingUp className="w-3 h-3" />,
   運営費用: <Building2 className="w-3 h-3" />,
@@ -175,19 +186,21 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
       {/* 下書きのみフォルダー（経費未登録） */}
       {draftOnlyFolders.map((draft) => (
         <div key={`draft-${draft.folder_name}`} className="border border-amber-300 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-3.5 bg-amber-50">
-            <div className="flex items-center gap-3 min-w-0 flex-1">
+          <div className="flex flex-col gap-2 px-4 py-3 bg-amber-50 sm:flex-row sm:items-center sm:justify-between">
+            {/* 上段: アイコン＋フォルダー名＋バッジ */}
+            <div className="flex items-center gap-2 min-w-0">
               <div className="w-1 h-4 bg-amber-400 shrink-0" />
-              <span className="text-sm font-bold text-foreground tracking-wider truncate">
+              <span className="text-sm font-bold text-foreground tracking-wider truncate max-w-[160px] sm:max-w-none">
                 {draft.folder_name}
               </span>
               <span className="shrink-0 inline-flex items-center gap-1 bg-amber-100 border border-amber-300 text-amber-700 text-[9px] font-bold tracking-widest px-1.5 py-0.5">
                 <FileEdit className="w-2.5 h-2.5" />
-                下書き保存中
+                下書き
               </span>
+              <span className="text-[10px] text-amber-600 tracking-wider shrink-0">{formatDate(draft.saved_at)}</span>
             </div>
-            <div className="flex items-center gap-2 shrink-0 ml-3">
-              <span className="text-[10px] text-amber-600 tracking-wider">{draft.saved_at}</span>
+            {/* 下段: ボタン群 */}
+            <div className="flex items-center gap-2 shrink-0">
               {onOpenDraft && (
                 <button
                   type="button"
@@ -226,17 +239,17 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
           return (
             <div key={folder} className="border border-border overflow-hidden">
               {/* Folder header: タップで展開/折りたたみ */}
-              <div className="flex items-center justify-between px-5 py-3.5 bg-secondary">
-                {/* 左側: アコーディオントリガー */}
+              <div className="flex flex-col gap-2 px-4 py-3 bg-secondary sm:flex-row sm:items-center sm:justify-between">
+                {/* 上段左: フォルダー名＋バッジ（タップで開閉） */}
                 <button
                   type="button"
                   onClick={() => toggleFolder(folder)}
-                  className="flex items-center gap-3 min-w-0 flex-1 text-left"
+                  className="flex items-center gap-2 min-w-0 flex-1 text-left"
                   aria-expanded={isOpen}
                   aria-controls={`folder-${folder}`}
                 >
                   <div className="w-1 h-4 bg-primary shrink-0" />
-                  <span className="text-sm font-bold text-foreground tracking-wider truncate">
+                  <span className="text-sm font-bold text-foreground tracking-wider truncate max-w-[160px] sm:max-w-none">
                     {folder}
                   </span>
                   {draftFolders.has(folder) && (
@@ -252,8 +265,8 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
                   />
                 </button>
 
-                {/* 右側: 合計＋追加＋PDFボタン */}
-                <div className="flex items-center gap-2 shrink-0 ml-3">
+                {/* 下段右: 合計＋ボタン群 */}
+                <div className="flex items-center gap-2 shrink-0 flex-wrap">
                   <span className={`text-sm font-black tracking-wider ${isNegative ? "text-destructive" : "text-primary"}`}>
                     {isNegative ? "-" : ""}¥{Math.abs(folderBalance).toLocaleString()}
                   </span>
@@ -317,7 +330,7 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
                           {expense.item_name}
                         </p>
                         <p className="text-[11px] text-muted-foreground tracking-wider mt-0.5">
-                          {expense.datetime}
+                          {formatDate(expense.datetime)}
                         </p>
                       </div>
                       <span className="text-sm font-bold text-foreground shrink-0 tracking-wider">
