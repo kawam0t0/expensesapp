@@ -67,6 +67,7 @@ const EXPENSE_FIELDS: FormField[] = [
   { category: "運営費用", item_name: "電気料金", label: "電気料金", allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "ガス料金", label: "ガス料金", allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "通信費", label: "通信費", allowFile: true, multiFile: true },
+  { category: "運営費用", item_name: "産業廃棄物回収費用", label: "産業廃棄物回収費用", allowFile: true, multiFile: true },
   // 運営備品費
   { category: "運営費用", item_name: "運営備品費（販促グッズ類）", label: "販促グッズ類", indent: 1, allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "運営備品費（液剤費）", label: "液剤費", indent: 1, allowFile: true, multiFile: true },
@@ -82,8 +83,8 @@ const EXPENSE_GROUP_HEADERS: Record<number, { label: string; color: string }> = 
   0:  { label: "人件費", color: "bg-blue-500/10 text-blue-600" },
   3:  { label: "ロイヤリティ・運営代行費", color: "bg-blue-500/10 text-blue-600" },
   5:  { label: "インフラ料金", color: "bg-blue-500/10 text-blue-600" },
-  9:  { label: "運営備品費", color: "bg-blue-500/10 text-blue-600" },
-  12: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
+  10: { label: "運営備品費", color: "bg-blue-500/10 text-blue-600" },
+  13: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
 };
 
 const ALL_FIELDS = [...SALES_FIELDS, ...EXPENSE_FIELDS];
