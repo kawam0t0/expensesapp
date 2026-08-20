@@ -53,9 +53,10 @@ export function FolderPdfPrint({ folderName, items }: FolderPdfPrintProps) {
 
   const printDate = new Date().toLocaleDateString("ja-JP", { year: "numeric", month: "long", day: "numeric" });
 
-  // 売上・運営費用を分離
+  // 売上・運営費用・その他を分離（その他は費用合計に含めない）
   const salesItems = items.filter((e) => e.category === "売上");
-  const expenseItems = items.filter((e) => e.category !== "売上");
+  const otherItems = items.filter((e) => e.category === "その他");
+  const expenseItems = items.filter((e) => e.category === "運営費用");
   const salesTotal = salesItems.reduce((s, e) => s + Number(e.amount), 0);
   const expenseTotal = expenseItems.reduce((s, e) => s + Number(e.amount), 0);
   const transferAmount = salesTotal - expenseTotal;
@@ -109,6 +110,31 @@ export function FolderPdfPrint({ folderName, items }: FolderPdfPrintProps) {
                   <td className="amount">¥{salesTotal.toLocaleString("ja-JP")}</td>
                   <td className="amount">¥{Math.floor(salesTotal / 1.1).toLocaleString("ja-JP")}</td>
                 </tr>
+              </tbody>
+            </table>
+          </>
+        )}
+
+        {/* その他（費用合計には含めない） */}
+        {otherItems.length > 0 && (
+          <>
+            <p className="section-title">その他</p>
+            <table>
+              <thead>
+                <tr>
+                  <th>日時</th>
+                  <th>品目</th>
+                  <th style={{ textAlign: "right" }}>金額</th>
+                </tr>
+              </thead>
+              <tbody>
+                {otherItems.map((e) => (
+                  <tr key={e.id}>
+                    <td>{e.datetime}</td>
+                    <td>{e.item_name}</td>
+                    <td className="amount">¥{Number(e.amount).toLocaleString("ja-JP")}</td>
+                  </tr>
+                ))}
               </tbody>
             </table>
           </>

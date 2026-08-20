@@ -52,7 +52,10 @@ const SALES_FIELDS: FormField[] = [
   { category: "売上", item_name: "現金売上", label: "現金売上", required: true, allowFile: true, multiFile: true },
   { category: "売上", item_name: "キャッシュレス売上", label: "キャッシュレス売上", required: true, allowFile: true, multiFile: true },
   { category: "売上", item_name: "サブスク売上", label: "サブスク売上", required: true, allowFile: true, multiFile: true },
-  { category: "売上", item_name: "その他売上", label: "その他売上", allowFile: true, multiFile: true },
+];
+
+const OTHER_FIELDS: FormField[] = [
+  { category: "その他", item_name: "電気料金調整費", label: "電気料金調整費", allowFile: true, multiFile: true },
 ];
 
 const EXPENSE_FIELDS: FormField[] = [
@@ -90,7 +93,7 @@ const EXPENSE_GROUP_HEADERS: Record<number, { label: string; color: string }> = 
   15: { label: "固定費", color: "bg-blue-500/10 text-blue-600" },
 };
 
-const ALL_FIELDS = [...SALES_FIELDS, ...EXPENSE_FIELDS];
+const ALL_FIELDS = [...SALES_FIELDS, ...OTHER_FIELDS, ...EXPENSE_FIELDS];
 
 // ---------------------------------------------------------------------------
 // 型定義
@@ -759,7 +762,7 @@ export function NewExpenseDrawer({
             </p>
           </div>
 
-          {/* ======== 売上セクション ======== */}
+          {/* ======== 売上���クション ======== */}
           <section className="space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-bold tracking-[0.15em] text-foreground">売上</h3>
@@ -798,6 +801,58 @@ export function NewExpenseDrawer({
                         </p>
                       )}
                     </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          {/* ======== その他セクション ======== */}
+          <section className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-bold tracking-[0.15em] text-foreground">その他</h3>
+            </div>
+            <div className="border border-border bg-card divide-y divide-border">
+              {OTHER_FIELDS.map((field) => {
+                const itemName = field.item_name;
+                const mFiles = multiFiles[itemName] ?? [];
+                const savedUrls = uploadedUrls[itemName]?.split("\n").filter(Boolean) ?? [];
+                return (
+                  <div key={itemName} className="px-4 py-4">
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                      <label className="text-sm font-medium text-foreground tracking-wider sm:flex-1 sm:min-w-0">{field.label}</label>
+                      <div className="flex items-start gap-2 w-full sm:w-auto sm:shrink-0">
+                        <div className="flex-1 sm:w-40 sm:flex-none relative">
+                          <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">{"¥"}</span>
+                          <input
+                            type="text"
+                            inputMode="numeric"
+                            value={amounts[itemName] ?? ""}
+                            onChange={(e) => setAmount(itemName, e.target.value)}
+                            placeholder="0"
+                            className="w-full bg-input border border-border text-foreground text-base sm:text-sm pl-7 pr-3 py-3 sm:py-2.5 focus:outline-none focus:border-primary transition-colors"
+                          />
+                        </div>
+                        <button type="button" onClick={() => fileInputRefs.current[`${itemName}_capture`]?.click()} className="shrink-0 w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center border border-border text-muted-foreground hover:text-foreground" title="写真を撮影">
+                          <Camera className="w-5 h-5 sm:w-4 sm:h-4" />
+                        </button>
+                        <button type="button" onClick={() => fileInputRefs.current[itemName]?.click()} className="shrink-0 w-11 h-11 sm:w-9 sm:h-9 flex items-center justify-center border border-border text-muted-foreground hover:text-foreground" title="ファイルを添付">
+                          <Paperclip className="w-5 h-5 sm:w-4 sm:h-4" />
+                        </button>
+                        <input ref={(el) => { fileInputRefs.current[`${itemName}_capture`] = el; }} type="file" accept="image/*" capture="environment" multiple className="hidden" onChange={(e) => { const selected = Array.from(e.target.files ?? []); if (selected.length) void handleFilesSelected(itemName, selected); e.target.value = ""; }} />
+                        <input ref={(el) => { fileInputRefs.current[itemName] = el; }} type="file" accept="image/*,application/pdf,.csv" multiple className="hidden" onChange={(e) => { const selected = Array.from(e.target.files ?? []); if (selected.length) void handleFilesSelected(itemName, selected); e.target.value = ""; }} />
+                      </div>
+                    </div>
+                    {(mFiles.length > 0 || savedUrls.length > 0) && (
+                      <div className="mt-2 flex flex-wrap gap-1.5">
+                        {[...savedUrls, ...mFiles.map((file) => file.name)].map((label, index) => (
+                          <span key={`${label}-${index}`} className="inline-flex items-center gap-1 bg-primary/10 border border-primary/30 text-primary px-2 py-1 text-[10px] tracking-wider">
+                            <Check className="w-2.5 h-2.5" />
+                            <span className="max-w-[150px] truncate">{label.split("/").pop()}</span>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 );
               })}
