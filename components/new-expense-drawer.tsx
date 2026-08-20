@@ -52,6 +52,7 @@ const SALES_FIELDS: FormField[] = [
   { category: "売上", item_name: "現金売上", label: "現金売上", required: true, allowFile: true, multiFile: true },
   { category: "売上", item_name: "キャッシュレス売上", label: "キャッシュレス売上", required: true, allowFile: true, multiFile: true },
   { category: "売上", item_name: "サブスク売上", label: "サブスク売上", required: true, allowFile: true, multiFile: true },
+  { category: "売上", item_name: "その他売上", label: "その他売上", allowFile: true, multiFile: true },
 ];
 
 const EXPENSE_FIELDS: FormField[] = [
@@ -69,7 +70,7 @@ const EXPENSE_FIELDS: FormField[] = [
   { category: "運営費用", item_name: "通信費", label: "通信費", allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "産業廃棄物回収費用", label: "産業廃棄物回収費用", allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "エアーシフト連携費用", label: "エアーシフト連携費用", allowFile: true, multiFile: true },
-  { category: "運営費用", item_name: "ダイアルパッド通信費", label: "ダイアルパッド通信費", defaultValue: 3300, allowFile: true, multiFile: true },
+  { category: "運営費用", item_name: "ダイアルパッド通信費", label: "ダイアルパッド通信費", defaultValue: 3000, allowFile: true, multiFile: true },
   // 運営備品費
   { category: "運営費用", item_name: "運営備品費（販促グッズ類）", label: "販促グッズ類", indent: 1, allowFile: true, multiFile: true },
   { category: "運営費用", item_name: "運営備品費（液剤費）", label: "液剤費", indent: 1, allowFile: true, multiFile: true },
