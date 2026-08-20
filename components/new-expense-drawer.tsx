@@ -54,9 +54,7 @@ const SALES_FIELDS: FormField[] = [
   { category: "売上", item_name: "サブスク売上", label: "サブスク売上", required: true, allowFile: true, multiFile: true },
 ];
 
-const OTHER_FIELDS: FormField[] = [
-  { category: "その他", item_name: "電気料金調整費", label: "電気料金調整費", allowFile: true, multiFile: true },
-];
+const OTHER_FIELDS: FormField[] = [];
 
 const EXPENSE_FIELDS: FormField[] = [
   // 人件費
@@ -129,6 +127,17 @@ export function NewExpenseDrawer({
   const [honbuStaffs, setHonbuStaffs] = useState<HonbuStaff[]>([]);
   // アップロード済みURL
   const [uploadedUrls, setUploadedUrls] = useState<Record<string, string>>({});
+  // 「その他」にユーザーが追加した項目名
+  const [customOtherItems, setCustomOtherItems] = useState<string[]>([]);
+  const [newCustomOtherItem, setNewCustomOtherItem] = useState("");
+  const customOtherFields: FormField[] = customOtherItems.map((itemName) => ({
+    category: "その他",
+    item_name: itemName,
+    label: itemName,
+    allowFile: true,
+    multiFile: true,
+  }));
+  const allOtherFields = [...OTHER_FIELDS, ...customOtherFields];
 
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSavingDraft, setIsSavingDraft] = useState(false);
@@ -160,6 +169,7 @@ export function NewExpenseDrawer({
       setFiles({});
       setMultiFiles({});
       setUploadedUrls({});
+      setCustomOtherItems([]);
       setHonbuStaffs([]);
       setDraftInfo(null);
       setAmazonCsvAmount(0);
@@ -171,7 +181,15 @@ export function NewExpenseDrawer({
           if (data.draft) {
             const saved: Record<string, string> = JSON.parse(data.draft.amounts_json);
             const savedUrls: Record<string, string> = JSON.parse(data.draft.files_json ?? "{}");
-            setAmounts({ ...defaults, ...saved });
+            let restoredCustomItems: string[] = [];
+            try {
+              restoredCustomItems = JSON.parse(saved.__custom_other_items ?? "[]");
+            } catch {
+              restoredCustomItems = [];
+            }
+            setCustomOtherItems(restoredCustomItems);
+            const { __custom_other_items: _customItems, ...savedAmounts } = saved;
+            setAmounts({ ...defaults, ...savedAmounts });
             setUploadedUrls(savedUrls);
           } else {
             setAmounts(defaults);
@@ -185,6 +203,7 @@ export function NewExpenseDrawer({
       setFiles({});
       setMultiFiles({});
       setUploadedUrls({});
+      setCustomOtherItems([]);
       setHonbuStaffs([]);
       setDraftInfo(null);
       setAmazonCsvAmount(0);
@@ -232,7 +251,10 @@ export function NewExpenseDrawer({
           };
 
           if (updated.amounts_json) {
-            setAmounts((prev) => ({ ...prev, ...updated.amounts_json }));
+            const customNames = JSON.parse(updated.amounts_json.__custom_other_items ?? "[]") as string[];
+            setCustomOtherItems(customNames);
+            const { __custom_other_items: _customItems, ...updatedAmounts } = updated.amounts_json;
+            setAmounts((prev) => ({ ...prev, ...updatedAmounts }));
           }
           if (updated.files_json) {
             setUploadedUrls(updated.files_json);
@@ -251,12 +273,16 @@ export function NewExpenseDrawer({
     if (step !== "form" || !folderName.trim()) return;
     if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     autoSaveTimerRef.current = setTimeout(() => {
-      void autoSave(folderName, amounts, uploadedUrls);
+      void autoSave(
+        folderName,
+        { ...amounts, __custom_other_items: JSON.stringify(customOtherItems) },
+        uploadedUrls
+      );
     }, 300);
     return () => {
       if (autoSaveTimerRef.current) clearTimeout(autoSaveTimerRef.current);
     };
-  }, [amounts, step, folderName, uploadedUrls, autoSave]);
+  }, [amounts, customOtherItems, step, folderName, uploadedUrls, autoSave]);
 
   // ファイル選択時：即座にSupabase Storageにアップロードして自動保存
   async function handleFilesSelected(itemName: string, selected: File[]) {
@@ -350,7 +376,11 @@ export function NewExpenseDrawer({
       const res = await fetch("/api/drafts/save", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ folder_name: folderName, amounts, uploaded_urls: urls }),
+        body: JSON.stringify({
+          folder_name: folderName,
+          amounts: { ...amounts, __custom_other_items: JSON.stringify(customOtherItems) },
+          uploaded_urls: urls,
+        }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -422,19 +452,26 @@ export function NewExpenseDrawer({
   }
 
 
-  const salesTotal = SALES_FIELDS.reduce(
+  const baseSalesTotal = SALES_FIELDS.reduce(
     (acc, f) => acc + (parseInt(amounts[f.item_name] ?? "0", 10) || 0),
     0
   );
+  const otherTotal = allOtherFields.reduce(
+    (acc, f) => acc + (parseInt(amounts[f.item_name] ?? "0", 10) || 0),
+    0
+  );
+  // 売上合計には「その他」の金額も含める
+  const salesTotal = baseSalesTotal + otherTotal;
 
-  // FCfee と 運営代行費 の自動計算値
-  const autoCalcValue = Math.round(salesTotal * 0.05);
+  // 自動計算費用は通常の売上だけを基準にする
+  const autoCalcValue = Math.round(baseSalesTotal * 0.05);
 
-  // 運営費用合計��autoCalc項目は salesTotal * 0.05 で計算）
-  const expenseTotal = EXPENSE_FIELDS.reduce((acc, f) => {
+  // 費用合計（電気料金調整費も振込・請求金額に反映）
+  const operatingExpenseTotal = EXPENSE_FIELDS.reduce((acc, f) => {
     if (f.autoCalc) return acc + (salesTotal > 0 ? autoCalcValue : 0);
     return acc + (parseInt(amounts[f.item_name] ?? "0", 10) || 0);
   }, 0);
+  const expenseTotal = operatingExpenseTotal;
 
   /** 本部スタッフ用: CSVから総労働時間を集計してスタッフ一覧をセット */
   async function handleHonbuCsv(file: File) {
@@ -547,7 +584,7 @@ export function NewExpenseDrawer({
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
 
-    // 必須項目バリデーション
+    // 必須���目バリデーション
     const requiredFields = ALL_FIELDS.filter((f) => f.required);
     const missingFields = requiredFields.filter((f) => {
       const raw = amounts[f.item_name];
@@ -561,7 +598,7 @@ export function NewExpenseDrawer({
 
     // 金額 > 0 の項目を抽出（autoCalc は salesTotal > 0 のとき追加）
     const activeItems: { field: FormField; amount: number }[] = [];
-    for (const f of ALL_FIELDS) {
+    for (const f of [...SALES_FIELDS, ...allOtherFields, ...EXPENSE_FIELDS]) {
       if (f.autoCalc) {
         if (salesTotal > 0) {
           activeItems.push({ field: f, amount: autoCalcValue });
@@ -582,7 +619,7 @@ export function NewExpenseDrawer({
     setIsSubmitting(true);
     try {
       // Google Driveへファイルアップロード（最終登録時）
-      // 優先順位:
+      // 優先順��:
       //   1. ローカルFileオブジェクト → Driveへ直接アップロード
       //   2. Supabase Storage URL → transfer-to-drive経由でDriveへ転送
       const urls: Record<string, string> = {};
@@ -813,7 +850,7 @@ export function NewExpenseDrawer({
               <h3 className="text-sm font-bold tracking-[0.15em] text-foreground">その他</h3>
             </div>
             <div className="border border-border bg-card divide-y divide-border">
-              {OTHER_FIELDS.map((field) => {
+              {allOtherFields.map((field) => {
                 const itemName = field.item_name;
                 const mFiles = multiFiles[itemName] ?? [];
                 const savedUrls = uploadedUrls[itemName]?.split("\n").filter(Boolean) ?? [];
@@ -856,6 +893,27 @@ export function NewExpenseDrawer({
                   </div>
                 );
               })}
+            </div>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={newCustomOtherItem}
+                onChange={(e) => setNewCustomOtherItem(e.target.value)}
+                placeholder="項目名を追加"
+                className="flex-1 bg-input border border-border px-3 py-2 text-sm text-foreground focus:outline-none focus:border-primary"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const name = newCustomOtherItem.trim();
+                  if (!name || allOtherFields.some((field) => field.item_name === name)) return;
+                  setCustomOtherItems((prev) => [...prev, name]);
+                  setNewCustomOtherItem("");
+                }}
+                className="border border-primary px-4 py-2 text-sm text-primary hover:bg-primary/10"
+              >
+                項目を追加
+              </button>
             </div>
           </section>
 
@@ -1049,7 +1107,7 @@ export function NewExpenseDrawer({
                                       ? "border-primary bg-primary/10 text-primary"
                                       : "border-border text-muted-foreground hover:text-foreground hover:border-foreground/50"
                                     }`}
-                                  title="Amazon/Cainz等のCSVをアップロード"
+                                  title="Amazon/Cainz等のCSVをア��プロード"
                                 >
                                   <Paperclip className="w-4 h-4" />
                                 </button>
@@ -1110,7 +1168,7 @@ export function NewExpenseDrawer({
                         </div>
                       )}
 
-                      {/* 下書き復元: アップロード済みファイルのURL表示（個別削除対応） */}
+                      {/* 下書き復元: ���ップロード済みファイルのURL表示（個別削除対応） */}
                       {uploadedUrls[field.item_name] && mFiles.length === 0 && (
                         <div className="mt-2 flex flex-wrap gap-1.5">
                           {uploadedUrls[field.item_name].split("\n").filter(Boolean).map((url, i) => {
@@ -1271,7 +1329,7 @@ export function NewExpenseDrawer({
                 </span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-xs text-muted-foreground/70 tracking-wider">振込金額（税抜）</span>
+                <span className="text-xs text-muted-foreground/70 tracking-wider">振込金額（税��）</span>
                 <span className={`text-sm font-bold ${salesTotal - expenseTotal >= 0 ? "text-emerald-600/70" : "text-red-400"}`}>
                   {`\u00A5${Math.floor((salesTotal - expenseTotal) / 1.1).toLocaleString("ja-JP")}`}
                 </span>

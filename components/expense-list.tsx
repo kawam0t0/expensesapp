@@ -230,8 +230,11 @@ export function ExpenseList({ onAddToFolder, onOpenDraft }: ExpenseListProps) {
       ))}
       {sortedFolderEntries
         .map(([folder, items]) => {
-          const salesTotal = items.filter((e) => e.category === "売上").reduce((s, e) => s + Number(e.amount), 0);
-          const expenseTotal = items.filter((e) => e.category === "運営費用").reduce((s, e) => s + Number(e.amount), 0);
+          const salesTotal = items
+            .filter((e) => e.category === "売上" || e.category === "その他")
+            .reduce((s, e) => s + Number(e.amount), 0);
+          const operatingExpenseTotal = items.filter((e) => e.category === "運営費用").reduce((s, e) => s + Number(e.amount), 0);
+          const expenseTotal = operatingExpenseTotal;
           const folderBalance = salesTotal - expenseTotal;
           const isNegative = folderBalance < 0;
           const isOpen = openFolders[folder] ?? false;
